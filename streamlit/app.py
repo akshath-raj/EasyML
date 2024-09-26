@@ -97,7 +97,7 @@ def add_bg_from_local(image_file):
     )
 
 # Call the function to set the background image
-add_bg_from_local('Untitled design (6).png')  # Ensure correct file path
+add_bg_from_local('Untitled design (6).jpg')  # Ensure correct file path
 
 # Function to upload the file
 def upload_file():
@@ -109,20 +109,11 @@ def upload_file():
     else:
         st.warning("Please upload a CSV file.")
 
-# Function to display data
+# Function to display data without the column selection
 def display_data():
     if 'df' in st.session_state:
         df = st.session_state['df']  # Retrieve the dataframe from session state
         st.write(df)  # Display the dataframe
-        
-        # Dropdown for selecting a column
-        column = st.selectbox("Select a column to predict", df.columns)
-        
-        # Store the selected column in session state
-        st.session_state['target_column'] = column
-        
-        # Display selected column data
-        st.write(f"Selected Column: {column}")
     else:
         st.warning("No file uploaded yet. Please upload a file.")
 
@@ -138,25 +129,87 @@ selected = option_menu(
 
 # Based on the selected option, display different pages
 if selected == "Home":
-    st.title("Welcome to the Home Page")
+    st.title("Welcome to Error 404-EasyML")
     st.write("This is the home page of the app.")
     upload_file()
-
-elif selected == "Data":
+def add_column_with_formula(df, new_column_name, formula):
+    try:
+        # Evaluate the formula in the context of the DataFrame
+        df[new_column_name] = df.eval(formula)
+        print(f"Column '{new_column_name}' added successfully!")
+    except Exception as e:
+        print(f"Error: {e}")
+    return df
+if selected == "Data":
     st.title("Data Page")
-    st.write("Your DataSet")
-    display_data()
     
-    genre = st.radio(
-        "Select your operation",
-        ["Regression", "Classification"]
-    )
+    # Center the dataset table using CSS
+    st.markdown("""
+    <style>
+    .center-table {
+        display: flex;
+        justify-content: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
-    # Store the selected task (regression/classification) in session state
-    if genre == "Regression":
-        st.session_state['task'] = 'regression'
-    elif genre == "Classification":
-        st.session_state['task'] = 'classification'
+    # Display the dataset in the center
+    with st.container():
+        st.write('<div class="center-table">', unsafe_allow_html=True)
+        
+        # Display the existing DataFrame from session state
+        if 'df' in st.session_state:
+            st.dataframe(st.session_state['df'])
+        st.write('</div>', unsafe_allow_html=True)
+    
+    # Create two columns for the dropdown and radio button
+    col1, col2 = st.columns(2)
+    
+    # Column 1: Dropdown for selecting a column to predict
+    with col1:
+        st.subheader("Select Column to Predict")
+        if 'df' in st.session_state:
+            df = st.session_state['df']
+            column = st.selectbox("Choose the target column:", df.columns)
+            st.session_state['target_column'] = column
+
+    # Column 2: Radio button for selecting operation (regression/classification)
+    with col2:
+        st.subheader("Select Your Operation")
+        genre = st.radio(
+            "Choose an operation:",
+            ["Regression", "Classification"]
+        )
+    
+        # Store the selected task (regression/classification) in session state
+        if genre == "Regression":
+            st.session_state['task'] = 'regression'
+        elif genre == "Classification":
+            st.session_state['task'] = 'classification'
+    
+    # Section to add a new column with a user-defined formula
+    st.subheader("Add a New Column with a Formula")
+    vvc,vvcc=st.columns(2)
+    # Input field for the new column name
+    new_column_name = vvc.text_input("Enter the new column name:")
+    
+    # Input field for the formula
+    formula = vvcc.text_input("Enter the formula (use column names):")
+    
+    # Button to apply the formula
+    if st.button("Add Column"):
+        if new_column_name and formula:
+            try:
+                # Apply the formula and add the new column
+                st.session_state['df'] = add_column_with_formula(st.session_state['df'], new_column_name, formula)
+                st.success(f"Column '{new_column_name}' added successfully!")
+                
+                # Display the updated DataFrame
+                st.dataframe(st.session_state['df'])  # Refresh the DataFrame display
+            except Exception as e:
+                st.error(f"Error: {e}")
+        else:
+            st.warning("Please provide both a column name and a formula.")
 
 elif selected == "Analysis":
     st.title("Analysis Page")
@@ -183,8 +236,8 @@ elif selected == "Analysis":
         st.warning("Please upload a CSV file and select a target column on the Data page.")
 
 elif selected == "Eda":
-    st.title("Eda")
-    
+    st.title("EDA - Exploratory Data Analysis")
+
     if 'df' in st.session_state:  # Ensure df is available
         df = st.session_state['df']  # Retrieve the dataframe from session state
 
@@ -202,62 +255,44 @@ elif selected == "Eda":
         def summary_statistics(df):
             return df.describe()
 
-        # Function to get and plot correlation matrix for numeric columns
+        # Function to get and plot correlation matrix for numeric columns (adjusted to smaller size)
         def correlation_matrix(df):
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             if len(numeric_cols) == 0:
                 return None
             corr = df[numeric_cols].corr()
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(5, 4))  # Adjust size to make it smaller
             sns.heatmap(corr, annot=True, cmap='coolwarm', linewidths=0.5, ax=ax)
             plt.title('Correlation Matrix')
             return fig
 
         # Function to plot histograms for numerical features
         def plot_histograms(df):
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()  # Get numeric columns
-            if numeric_cols:  # Only proceed if numeric columns are present
-                num_plots = len(numeric_cols)
-                fig, axes = plt.subplots(nrows=(num_plots + 1) // 2, ncols=2, figsize=(14, 4 * ((num_plots + 1) // 2)))  # Adjust subplots
-                
-                axes = axes.flatten()  # Flatten the axes array for easier iteration
-                
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if numeric_cols:
+                fig, axes = plt.subplots(nrows=(len(numeric_cols) + 1) // 2, ncols=2, figsize=(14, 4 * ((len(numeric_cols) + 1) // 2)))
+                axes = axes.flatten()
+
                 for i, col in enumerate(numeric_cols):
                     df[col].plot(kind='hist', bins=30, ax=axes[i], title=f'Histogram of {col}', color='blue', edgecolor='black')
                     axes[i].set_xlabel(col)
-                
-                # Remove any unused axes
-                for ax in axes[num_plots:]:
+
+                for ax in axes[len(numeric_cols):]:
                     fig.delaxes(ax)
-                
+
                 plt.tight_layout()
                 return fig
             else:
                 st.warning("No numeric columns found for plotting histograms.")
                 return None
 
-        # Function to plot boxplots for numerical features
-        def plot_boxplots(df):
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()  # Get numeric columns
-            if numeric_cols:
-                figs = []
-                for col in numeric_cols:
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    sns.boxplot(x=df[col], ax=ax)
-                    ax.set_title(f'Boxplot of {col}')
-                    figs.append(fig)
-                return figs
-            else:
-                st.warning("No numeric columns found for plotting boxplots.")
-                return None
-
         # Function to plot KDE for numerical features
         def plot_kde(df):
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()  # Get numeric columns
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             if numeric_cols:
                 figs = []
                 for col in numeric_cols:
-                    fig, ax = plt.subplots(figsize=(8, 4))
+                    fig, ax = plt.subplots(figsize=(5, 4))
                     sns.kdeplot(df[col], ax=ax, fill=True, color='blue')
                     ax.set_title(f'KDE Plot of {col}')
                     ax.set_xlabel(col)
@@ -267,10 +302,40 @@ elif selected == "Eda":
                 st.warning("No numeric columns found for plotting KDE.")
                 return None
 
+        # Function to plot boxplots for numerical features
+        def plot_boxplots(df):
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if numeric_cols:
+                figs = []
+                for col in numeric_cols:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    sns.boxplot(x=df[col], ax=ax)
+                    ax.set_title(f'Boxplot of {col}')
+                    figs.append(fig)
+                return figs
+            else:
+                st.warning("No numeric columns found for plotting boxplots.")
+                return None
+
+        # Function to plot violin plots for numerical features
+        def plot_violinplots(df):
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if numeric_cols:
+                figs = []
+                for col in numeric_cols:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    sns.violinplot(x=df[col], ax=ax)
+                    ax.set_title(f'Violin Plot of {col}')
+                    figs.append(fig)
+                return figs
+            else:
+                st.warning("No numeric columns found for plotting violin plots.")
+                return None
+
         # Function to plot pair plots for numeric features
         def plot_pairplot(df):
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()  # Get numeric columns
-            if len(numeric_cols) > 1:  # Ensure there are at least 2 numeric columns for pair plot
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if len(numeric_cols) > 1:
                 fig = sns.pairplot(df[numeric_cols])
                 plt.suptitle("Pair Plot", y=1.02)
                 return fig
@@ -280,104 +345,125 @@ elif selected == "Eda":
 
         # Function to plot count plots for categorical features
         def plot_countplots(df):
-            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()  # Get categorical columns
+            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
             if categorical_cols:
                 figs = []
                 for col in categorical_cols:
-                    fig, ax = plt.subplots(figsize=(8, 4))
+                    fig, ax = plt.subplots(figsize=(5, 4))
                     sns.countplot(x=df[col], order=df[col].value_counts().index, ax=ax)
                     plt.title(f'Countplot of {col}')
-                    plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
+                    plt.xticks(rotation=90)
                     figs.append(fig)
                 return figs
             else:
                 st.warning("No categorical columns found for count plots.")
                 return None
 
-        # Function to plot violin plots for numeric features
-        def plot_violinplots(df):
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()  # Get numeric columns
-            if numeric_cols:
-                figs = []
-                for col in numeric_cols:
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    sns.violinplot(x=df[col], ax=ax)
-                    ax.set_title(f'Violin Plot of {col}')
-                    figs.append(fig)
-                return figs
-            else:
-                st.warning("No numeric columns found for plotting violin plots.")
-                return None
+        # Layout the page with a sidebar for options and the graphs in a 2-column layout
+        with st.sidebar:
+            st.header("EDA Options")
+            sel = option_menu(
+                menu_title=None,  # required
+                options=["Correlation Matrix", "Histograms", "KDE Plots", "Boxplots", "Violin Plots", "Pair Plot", "Count Plots","Dataset info"],  # required
+                icons=["graph", "graph", "graph", "graph", "graph", "graph", "graph","graph"],
+                menu_icon="cast",  # optional
+                default_index=0,  # optional
+                orientation="vertical"  # Sidebar will be vertical
+            )
 
-        st.header("Dataset Information")
-        info = dataset_info(df)
-        st.write("Shape:", info["shape"])
-        st.write("Data Types:")
-        st.write(info["data_types"])
-        st.write("First 5 rows:")
-        st.write(info["first_5_rows"])
-        st.write("Missing Values:")
-        st.write(info["missing_values"])
-        st.write("Unique Values:")
-        st.write(info["unique_values"])
-
-        # Summary statistics
-        st.header("Summary Statistics")
-        st.write(summary_statistics(df))
-
+        # Use two columns for displaying graphs (side by side)
+        col1, col2 = st.columns(2)
 
         # Display correlation matrix
-        corr_fig = correlation_matrix(df)
-        if corr_fig:
-            st.write("### Correlation Matrix:")
-            st.pyplot(corr_fig)
+        if sel == "Correlation Matrix":
+            corr_fig = correlation_matrix(df)
+            if corr_fig:
+                with st.container():
+                    st.write("### Correlation Matrix:")
+                    st.pyplot(corr_fig)
 
         # Display histograms
-        hist_fig = plot_histograms(df)
-        if hist_fig:
-            st.write("### Histograms of Numeric Features:")
-            st.pyplot(hist_fig)
-
-        # Display boxplots
-        boxplots = plot_boxplots(df)
-        if boxplots:
-            st.write("### Boxplots of Numeric Features:")
-            cols = st.columns(len(boxplots))  # Create columns for boxplots
-            for i, fig in enumerate(boxplots):
-                with cols[i]:
-                    st.pyplot(fig)
+        if sel == "Histograms":
+            hist_fig = plot_histograms(df)
+            if hist_fig:
+                with st.container():
+                    st.write("### Histograms of Numeric Features:")
+                    st.pyplot(hist_fig)
 
         # Display KDE plots
-        kde_plots = plot_kde(df)
-        if kde_plots:
-            st.write("### KDE Plots of Numeric Features:")
-            cols = st.columns(len(kde_plots))  # Create columns for KDE plots
-            for i, fig in enumerate(kde_plots):
-                with cols[i]:
-                    st.pyplot(fig)
+        if sel == "KDE Plots":
+            kde_plots = plot_kde(df)
+            if kde_plots:
+                with st.container():
+                    st.write("### KDE Plots of Numeric Features:")
+                    for i in range(0, len(kde_plots), 2):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.pyplot(kde_plots[i])
+                        if i + 1 < len(kde_plots):
+                            with col2:
+                                st.pyplot(kde_plots[i + 1])
 
-        # Display Pair Plot
-        pair_plot = plot_pairplot(df)
-        if pair_plot:
-            st.write("### Pair Plot of Numeric Features:")
-            st.pyplot(pair_plot)
-
-        # Display count plots
-        count_plots = plot_countplots(df)
-        if count_plots:
-            st.write("### Count Plots of Categorical Features:")
-            cols = st.columns(len(count_plots))  # Create columns for count plots
-            for i, fig in enumerate(count_plots):
-                with cols[i]:
-                    st.pyplot(fig)
+        # Display boxplots
+        if sel == "Boxplots":
+            boxplots = plot_boxplots(df)
+            if boxplots:
+                with st.container():
+                    st.write("### Boxplots of Numeric Features:")
+                    for i in range(0, len(boxplots), 2):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.pyplot(boxplots[i])
+                        if i + 1 < len(boxplots):
+                            with col2:
+                                st.pyplot(boxplots[i + 1])
 
         # Display violin plots
-        violin_plots = plot_violinplots(df)
-        if violin_plots:
-            st.write("### Violin Plots of Numeric Features:")
-            cols = st.columns(len(violin_plots))  # Create columns for violin plots
-            for i, fig in enumerate(violin_plots):
-                with cols[i]:
-                    st.pyplot(fig)
+        if sel == "Violin Plots":
+            violin_plots = plot_violinplots(df)
+            if violin_plots:
+                with st.container():
+                    st.write("### Violin Plots of Numeric Features:")
+                    for i in range(0, len(violin_plots), 2):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.pyplot(violin_plots[i])
+                        if i + 1 < len(violin_plots):
+                            with col2:
+                                st.pyplot(violin_plots[i + 1])
 
-        
+        # Display pair plot
+        if sel == "Pair Plot":
+            pair_plot = plot_pairplot(df)
+            if pair_plot:
+                with st.container():
+                    st.write("### Pair Plot of Numeric Features:")
+                    st.pyplot(pair_plot)
+
+        # Display count plots
+        if sel == "Count Plots":
+            count_plots = plot_countplots(df)
+            if count_plots:
+                with st.container():
+                    st.write("### Count Plots of Categorical Features:")
+                    for i in range(0, len(count_plots), 2):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.pyplot(count_plots[i])
+                        if i + 1 < len(count_plots):
+                            with col2:
+                                st.pyplot(count_plots[i + 1])
+
+
+        if sel=="Dataset info":
+          st.write("### Dataset Information")
+          info = dataset_info(df)
+          st.write("Shape:", info["shape"])
+          st.write("Data Types:")
+          st.write(info["data_types"])
+          st.write("First 5 rows:")
+          st.write(info["first_5_rows"])
+          st.write("Missing Values:")
+          st.write(info["missing_values"])
+          st.write("Unique Values:")
+          st.write(info["unique_values"])
